@@ -1,0 +1,36 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+pgdata/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.eggs/
+dist/
+build/
+*.sqlite3
+logs/**/*.zip
+logs/**/*.gz
+celerybeat-schedule
+**/celerybeat-schedule
+**/celerybeat-schedule.*
+staticfiles/
+
+# docker-mailserver persistent data
+docker-data/dms/
+# Database dumps
+*.dump
+
+# Runtime logs (created by docker compose volumes)
+logs/
+
+# OS / editor
+.DS_Store
+.vscode/
