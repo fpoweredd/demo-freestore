@@ -1,0 +1,82 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:catalog_digitalitem_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Bulk upload
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Bulk upload digital items</h1>
+  <p>Paste one key per line. Each line becomes one <code>DigitalItem</code> row.</p>
+
+  <div
+    id="preorder-pending-alert"
+    role="status"
+    style="{% if pending_preorder_total > 0 %}display:block;{% else %}display:none;{% endif %} margin: 1em 0; padding: 14px 18px; background: #fff3e0; border: 1px solid #ff9800; border-left: 5px solid #ff9800; color: #bf360c; border-radius: 4px; font-size: 14px;"
+  >
+    <strong style="color: #e65100;">Paid pre-orders awaiting stock</strong> (<strong>{{ pending_preorder_total }}</strong>  key lines)
+  </div>
+  <span id="preorder-pending-meta" data-url="{{ pending_preorders_url }}" hidden></span>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="submit-row">
+      <input type="submit" value="Upload" class="default">
+      <a href="{% url 'admin:catalog_digitalitem_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+</div>
+<script>
+(function () {
+  var meta = document.getElementById("preorder-pending-meta");
+  var alertBox = document.getElementById("preorder-pending-alert");
+  var textEl = document.getElementById("preorder-pending-text");
+  var select = document.querySelector("select[name='product']");
+  if (!meta || !alertBox || !textEl || !select) return;
+  var url = meta.getAttribute("data-url");
+  if (!url) return;
+
+  function render(qty) {
+    var n = parseInt(qty, 10) || 0;
+    if (n > 0) {
+      textEl.innerHTML =
+        "For this product you need to upload at least <strong>" + n + "</strong> key line(s) " +
+        "(paid pre-order quantity). You may paste more lines if you want extra stock.";
+      alertBox.style.display = "block";
+    } else {
+      textEl.textContent = "";
+      alertBox.style.display = "none";
+    }
+  }
+
+  function refresh() {
+    var id = select.value;
+    if (!id) {
+      alertBox.style.display = "none";
+      return;
+    }
+    fetch(url + "?product_id=" + encodeURIComponent(id), {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("bad status");
+        return r.json();
+      })
+      .then(function (data) {
+        render(data.pending_qty);
+      })
+      .catch(function () {});
+  }
+
+  select.addEventListener("change", refresh);
+})();
+</script>
+{% endblock %}

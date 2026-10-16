@@ -1,0 +1,21 @@
+{% load catalog_extras %}
+{% for card in cards %}
+  <a
+    class="product-card"
+    href="{% url 'catalog:product-detail' card.slug %}"
+    hx-get="{% url 'catalog:product-detail' card.slug %}"
+  >
+    <div class="product-media">
+      {% if card.image %}
+        <img src="{{ card.image.url }}" alt="{{ card.name }}">
+      {% elif card.image_url %}
+        <img src="{{ card.image_url }}" alt="{{ card.name }}">
+      {% else %}
+        <img src="https://placehold.co/600x600/151922/ffffff?text={{ card.name|urlencode }}" alt="{{ card.name }}">
+      {% endif %}
+      {% if card.is_featured %}<span class="badge">Popular</span>{% endif %}
+    </div>
+    <p class="product-title">{{ card.name }}</p>
+    <p class="product-sub">{{ card.ui_caption|default:card.category.name }}</p>
+  </a>
+{% endfor %}

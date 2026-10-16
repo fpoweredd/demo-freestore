@@ -1,0 +1,13 @@
+<div class="container">
+  <div class="profile-layout">
+    <nav class="profile-nav">
+      <a class="small-btn profile-btn" href="{% url 'accounts:balance' %}?next={{ request.get_full_path|urlencode }}" hx-boost="false">Balance</a>
+      <a class="small-btn profile-btn active" href="{% url 'accounts:profile' %}" hx-boost="false">Profile</a>
+      <a class="small-btn profile-btn" href="{% url 'accounts:orders' %}" hx-boost="false">Orders</a>
+      {% comment %}<a class="small-btn profile-btn" href="#" hx-boost="false">referral</a>{% endcomment %}
+    </nav>
+    <div class="section" style="display:grid;gap:18px;">
+      {% include "accounts/partials/account_profile_content.html" %}
+    </div>
+  </div>
+</div>

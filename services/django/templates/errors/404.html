@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Page not found — Freestore{% endblock %}
+
+{% block meta_robots %}
+  <meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block content %}
+<div class="container error-page">
+  {% if is_preview %}
+    <p class="error-page__preview-banner" role="status">Preview (dev only): this is the same template used for real 404 responses in production.</p>
+  {% endif %}
+  <div class="error-page__inner">
+    <p class="error-page__code" aria-hidden="true">404</p>
+    <h1 class="error-page__title">Page not found</h1>
+    <p class="error-page__lead muted">
+      This page doesn't exist or the link is outdated.<br>
+      Check the URL or go back to the catalog.
+    </p>
+    <div class="error-page__actions">
+      <a
+        class="error-page__cta"
+        href="{% url 'catalog:home' %}"
+        hx-get="{% url 'catalog:home' %}"
+        hx-target="#main-content"
+        hx-swap="innerHTML"
+        hx-push-url="true"
+      >Home</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

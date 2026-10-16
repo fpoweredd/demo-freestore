@@ -1,0 +1,42 @@
+{% include "partials/messages.html" %}
+
+<div class="container">
+  <div class="spacer-24"></div>
+
+  <section class="section">
+    <div class="home-feed-head" style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;flex-wrap:wrap;">
+      <h2 style="margin:0;font-size:28px;font-weight:900;letter-spacing:-.02em;">
+        {% if search_query or filter_tag %}Search results{% else %}{% endif %}
+      </h2>
+      <div class="tabs home-feed-tabs">
+        <a href="{% url 'catalog:home' %}?feed=popular{% if search_query %}&amp;q={{ search_query|urlencode }}{% endif %}{% if filter_tag %}&amp;tag={{ filter_tag|urlencode }}{% endif %}" hx-get="{% url 'catalog:home' %}?feed=popular{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if filter_tag %}&tag={{ filter_tag|urlencode }}{% endif %}" class="tab {% if active_feed == 'popular' %}active{% endif %}">Popular</a>
+        <a href="{% url 'catalog:home' %}?feed=new{% if search_query %}&amp;q={{ search_query|urlencode }}{% endif %}{% if filter_tag %}&amp;tag={{ filter_tag|urlencode }}{% endif %}" hx-get="{% url 'catalog:home' %}?feed=new{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if filter_tag %}&tag={{ filter_tag|urlencode }}{% endif %}" class="tab {% if active_feed == 'new' %}active{% endif %}">New</a>
+      </div>
+    </div>
+
+    <div id="recommended-grid" class="grid products-grid">
+      {% include "catalog/partials/recommended_cards_items.html" %}
+    </div>
+
+    <div id="recommended-load-more">
+      {% include "catalog/partials/recommended_load_more_button.html" %}
+    </div>
+  </section>
+
+  {% for row in pinned_category_rows %}
+    <div class="spacer-24"></div>
+    <section class="section">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;flex-wrap:wrap;">
+        <h2 style="margin:0;font-size:28px;font-weight:900;letter-spacing:-.02em;">{{ row.title }}</h2>
+      </div>
+      <div id="pinned-grid-{{ row.section.id }}" class="grid products-grid">
+        {% include "catalog/partials/pinned_section_items.html" with cards=row.cards %}
+      </div>
+      <div id="pinned-load-more-{{ row.section.id }}">
+        {% include "catalog/partials/pinned_section_load_more_button.html" with section=row.section next_page=row.next_page search_query=search_query %}
+      </div>
+    </section>
+  {% endfor %}
+
+  <div class="spacer-24"></div>
+</div>

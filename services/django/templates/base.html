@@ -1,0 +1,968 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta name="enot" content="97a9f736" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Freestore{% endblock %}</title>
+  {% block meta_robots %}{% endblock %}
+  <link rel="icon" href="{% static 'favicon.ico' %}">
+  <link rel="stylesheet" href="{% static 'css/store.css' %}">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  {% if turnstile_site_key %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {% endif %}
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="4cb08684-ddf7-4eef-8a6e-31c614858b70"></script>
+  <script type="text/javascript">
+    (function (c, l, a, r, i, t, y) {
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+      t = l.createElement(r);
+      t.async = 1;
+      t.src = "https://www.clarity.ms/tag/" + i;
+      y = l.getElementsByTagName(r)[0];
+      y.parentNode.insertBefore(t, y);
+    })(window, document, "clarity", "script", "wh7w5ixdia");
+  </script>
+  <!-- Yandex.Metrika counter -->
+  <script type="text/javascript">
+    (function (m, e, t, r, i, k, a) {
+      m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments); };
+      m[i].l = 1 * new Date();
+      for (var j = 0; j < document.scripts.length; j++) {
+        if (document.scripts[j].src === r) { return; }
+      }
+      k = e.createElement(t);
+      a = e.getElementsByTagName(t)[0];
+      k.async = 1;
+      k.src = r;
+      a.parentNode.insertBefore(k, a);
+    })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js?id=109053844", "ym");
+
+    ym(109053844, "init", {
+      ssr: true,
+      webvisor: true,
+      clickmap: true,
+      ecommerce: "dataLayer",
+      referrer: document.referrer,
+      url: location.href,
+      accurateTrackBounce: true,
+      trackLinks: true
+    });
+  </script>
+  <!-- /Yandex.Metrika counter -->
+  <meta name="lava-verify" content="bb24c39b631ff18f" />
+</head>
+
+<body
+  x-data="{
+    authOpen: false,
+    modalUrl: '',
+    balanceAlertOpen: false,
+    balanceAlertMessage: 'Insufficient balance',
+    balanceTopupUrl: '{% url "accounts:balance" %}',
+    openModal(url) {
+      let next = (window.location && (window.location.pathname + window.location.search)) || '/';
+      if (window.location && window.location.pathname === '{% url "accounts:logout" %}') {
+        next = '/';
+      }
+      const hasNext = url && url.indexOf('next=') !== -1;
+      if (url && !hasNext) {
+        url = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent(next);
+      }
+      this.modalUrl = url;
+      this.authOpen = true;
+      this.$nextTick(() => {
+        const el = document.getElementById('auth-modal-content');
+        if (el && window.htmx && this.modalUrl) {
+          window.htmx.ajax('GET', this.modalUrl, { target: '#auth-modal-content', swap: 'innerHTML' });
+        }
+      });
+    },
+    init() {
+      this.$watch('authOpen', (open) => {
+        if (!open) return;
+        this.$nextTick(() => {
+          const el = document.getElementById('auth-modal-content');
+          if (el && window.htmx) {
+            window.htmx.process(el);
+            if (this.modalUrl) {
+              window.htmx.ajax('GET', this.modalUrl, { target: '#auth-modal-content', swap: 'innerHTML' });
+            } else {
+              let next = (window.location && (window.location.pathname + window.location.search)) || '/';
+              if (window.location && window.location.pathname === '{% url "accounts:logout" %}') {
+                next = '/';
+              }
+              const url = '{% url "accounts:auth-modal-login" %}?next=' + encodeURIComponent(next);
+              window.htmx.ajax('GET', url, { target: '#auth-modal-content', swap: 'innerHTML' });
+            }
+          }
+        });
+      });
+      document.body.addEventListener('auth-success', () => {
+        this.authOpen = false;
+      });
+      document.body.addEventListener('open-auth-modal', (event) => {
+        const detail = event && event.detail ? event.detail : {};
+        const url = detail.url || '{% url "accounts:auth-modal-login" %}';
+        this.openModal(url);
+      });
+      document.body.addEventListener('insufficient-balance', (event) => {
+        const detail = event && event.detail ? event.detail : {};
+        this.balanceAlertMessage = detail.message || 'Insufficient balance';
+        this.balanceTopupUrl = detail.topup_url || '{% url "accounts:balance" %}';
+        this.balanceAlertOpen = true;
+      });
+      document.body.addEventListener('htmx:oobAfterSwap', (event) => {
+        const target = event.detail && event.detail.target;
+        if (!target || target.id !== 'auth-buttons-slot') return;
+        if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+          window.Alpine.initTree(target);
+        }
+      });
+
+      // Render Turnstile widgets inserted by HTMX swaps (Turnstile does not
+      // automatically render nodes added after initial page load).
+      function refreshCaptchaSubmitLocks(root) {
+        var scope = root || document;
+        scope.querySelectorAll && scope.querySelectorAll('form').forEach(function (form) {
+          var widget = form.querySelector('.cf-turnstile');
+          if (!widget) return;
+          var submit = form.querySelector('button[type=submit], input[type=submit]');
+          if (!submit) return;
+          var tokenInput = form.querySelector('input[name=cf-turnstile-response], textarea[name=cf-turnstile-response]');
+          var hasToken = !!(tokenInput && tokenInput.value && tokenInput.value.trim());
+          submit.disabled = !hasToken;
+        });
+      }
+
+      window.onTurnstileSuccess = function () {
+        refreshCaptchaSubmitLocks(document);
+      };
+
+      window.onTurnstileExpired = function () {
+        refreshCaptchaSubmitLocks(document);
+      };
+
+      document.body.addEventListener('htmx:afterSwap', (event) => {
+        const swapTarget = event.detail && event.detail.target;
+        if (swapTarget && swapTarget.id === 'main-content') {
+          window.scrollTo(0, 0);
+        }
+        try {
+          if (!window.turnstile) return;
+          const root = event.detail && event.detail.target ? event.detail.target : document;
+          root.querySelectorAll && root.querySelectorAll('.cf-turnstile').forEach((el) => {
+            if (el.getAttribute('data-turnstile-rendered') === '1') return;
+            const sitekey = el.getAttribute('data-sitekey');
+            if (!sitekey) return;
+            window.turnstile.render(el, {
+              sitekey,
+              callback: window.onTurnstileSuccess,
+              'expired-callback': window.onTurnstileExpired,
+              'error-callback': window.onTurnstileExpired,
+            });
+            el.setAttribute('data-turnstile-rendered', '1');
+          });
+          refreshCaptchaSubmitLocks(root);
+        } catch (e) {
+          // ignore
+        }
+      });
+      document.body.addEventListener('htmx:afterRequest', (event) => {
+        try {
+          var xhr = event && event.detail ? event.detail.xhr : null;
+          if (!xhr || !xhr.getResponseHeader) return;
+          if (xhr.status === 422) {
+            var ctHeader = xhr.getResponseHeader('Content-Type') || '';
+            var ct = ctHeader.split(';')[0].trim().toLowerCase();
+            if (ct === 'application/json' &&
+                typeof window.applyProductDetailValidationErrors === 'function') {
+              try {
+                var vd = JSON.parse(xhr.responseText || '{}');
+                window.applyProductDetailValidationErrors(vd);
+              } catch (e422) {}
+            }
+            return;
+          }
+          if (xhr.getResponseHeader('X-Insufficient-Balance') === '1') {
+            var shortfall = (xhr.getResponseHeader('X-Insufficient-Balance-Shortfall') || '').trim();
+            this.balanceAlertMessage = shortfall
+              ? ('Insufficient balance.\nYou need ' + shortfall + ' more USD.')
+              : 'Insufficient balance';
+            this.balanceTopupUrl = xhr.getResponseHeader('X-Balance-Topup-Url') || '{% url "accounts:balance" %}';
+            this.balanceAlertOpen = true;
+            return;
+          }
+          if (xhr.getResponseHeader('X-Open-Auth-Modal') === '1') {
+            var modalUrl = xhr.getResponseHeader('X-Open-Auth-Modal-Url') || '{% url "accounts:auth-modal-login" %}';
+            this.openModal(modalUrl);
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      document.addEventListener('DOMContentLoaded', function () {
+        refreshCaptchaSubmitLocks(document);
+      });
+      document.addEventListener('click', (event) => {
+        const toggle = event.target.closest('[data-auth-menu-toggle]');
+        const wrap = event.target.closest('[data-auth-wrap]');
+        document.querySelectorAll('.auth-wrap-js.is-open').forEach((openWrap) => {
+          if (!wrap || openWrap !== wrap) {
+            openWrap.classList.remove('is-open');
+            const btn = openWrap.querySelector('[data-auth-menu-toggle]');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+          }
+        });
+        if (!toggle) return;
+        const host = toggle.closest('[data-auth-wrap]');
+        if (!host) return;
+        const willOpen = !host.classList.contains('is-open');
+        host.classList.toggle('is-open', willOpen);
+        toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      });
+    }
+  }"
+  hx-boost="true"
+  hx-target="#main-content"
+  hx-swap="innerHTML"
+  hx-push-url="true"
+>
+  <noscript>
+    <div><img src="https://mc.yandex.ru/watch/109053844" style="position:absolute; left:-9999px;" alt=""></div>
+  </noscript>
+
+  <div id="django-messages" class="msg-oob" role="status" aria-live="polite">
+    {% if not auth_messages_only_inline|default:False %}
+      {% for message in messages %}
+        <div class="msg-oob__item msg-oob__item--{{ message.tags|default:'info' }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <header
+    class="sticky-wrap"
+    x-data="{
+      scrolled: false,
+      lastY: 0,
+      onScroll() {
+        const y = window.scrollY || window.pageYOffset;
+        const diff = y - this.lastY;
+        if (y < 100) this.scrolled = false;
+        else if (diff > 5) this.scrolled = true;
+        else if (diff < -10) this.scrolled = false;
+        this.lastY = y;
+      }
+    }"
+    @scroll.window="onScroll()"
+    x-init="lastY = window.scrollY || window.pageYOffset"
+  >
+    <div class="header-shell" :class="{ scrolled: scrolled }">
+      <div class="top-row">
+        <a href="{% url 'catalog:home' %}" class="brand" hx-get="{% url 'catalog:home' %}">
+          <picture>
+            <source media="(max-width: 720px)" srcset="{% static 'img/lgoo-mobile.png' %}">
+            <img class="brand-logo" src="{% static 'img/logo.png' %}" alt="FreeStorex">
+          </picture>
+        </a>
+        <div class="nav-row">
+          <nav class="nav-inner">
+            {% comment %}
+            Temporary: header category navigation is hidden.
+            <a class="pill" href="{% url 'catalog:home' %}" hx-get="{% url 'catalog:home' %}">Catalog</a>
+            <a class="pill" href="{% url 'catalog:home' %}?category=games" hx-get="{% url 'catalog:home' %}?category=games">Games</a>
+            <a class="pill" href="{% url 'catalog:home' %}?category=subscriptions" hx-get="{% url 'catalog:home' %}?category=subscriptions">Subscriptions</a>
+            <a class="pill" href="{% url 'catalog:home' %}?category=top-up" hx-get="{% url 'catalog:home' %}?category=top-up">Top-ups</a>
+            <a class="pill" href="{% url 'catalog:home' %}?category=game-keys" hx-get="{% url 'catalog:home' %}?category=game-keys">Keys</a>
+            {% endcomment %}
+          </nav>
+        </div>
+        <div id="auth-buttons-slot">{% include "partials/auth_buttons.html" %}</div>
+      </div>
+      <div class="search-wrap">
+        <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3" />
+        </svg>
+        <form hx-get="{% url 'catalog:home' %}" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="true">
+          {% if catalog_filter_tag %}<input type="hidden" name="tag" value="{{ catalog_filter_tag }}">{% endif %}
+          <input type="text" class="search-input" name="q" value="{{ search_query|default:'' }}" placeholder="Search products" autocomplete="off">
+        </form>
+      </div>
+    </div>
+  </header>
+
+  {% if shop_maintenance_mode %}
+  <div style="margin:12px auto 0;max-width:1320px;padding:10px 14px;border:1px solid rgba(245,158,11,.45);border-radius:10px;background:rgba(245,158,11,.12);color:#fcd34d;">
+    Maintenance: some features may be temporarily unavailable.
+  </div>
+  {% endif %}
+
+  <main id="main-content" hx-history-elt>
+    {% block content %}{% endblock %}
+  </main>
+
+  {% include "partials/footer.html" %}
+
+  <template x-if="authOpen">
+    <div class="modal-overlay" x-cloak @click.self="authOpen = false">
+      <div class="modal">
+        <button type="button" class="x" @click="authOpen = false" aria-label="Close">×</button>
+        <div id="auth-modal-content"></div>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="balanceAlertOpen">
+    <div class="modal-overlay" x-cloak @click.self="balanceAlertOpen = false">
+      <div class="modal" style="max-width:460px;">
+        <button type="button" class="x" @click="balanceAlertOpen = false" aria-label="Close">×</button>
+        <div style="display:grid;gap:14px;">
+          <h2 style="margin:0;">Top up your balance</h2>
+          <p class="muted" style="margin:0;white-space:pre-line;" x-text="balanceAlertMessage"></p>
+          <a
+            class="buy"
+            :href="balanceTopupUrl"
+            :hx-get="balanceTopupUrl"
+            hx-target="#main-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            @click="balanceAlertOpen = false"
+            style="text-align:center;text-decoration:none;"
+          >Top up balance</a>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    (function () {
+      function getCsrfToken() {
+        var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+      }
+
+      (function tryTelegramWebAppAutoLogin() {
+        if (window.__tgAutoLoginDone) return;
+        var isAuthenticated = "{{ request.user.is_authenticated|yesno:'true,false' }}" === "true";
+        if (isAuthenticated) return;
+
+        var attempts = 0;
+        var maxAttempts = 20;
+
+        function run() {
+          if (window.__tgAutoLoginDone) return;
+          attempts += 1;
+          var webApp = window.Telegram && window.Telegram.WebApp;
+          var initData = (webApp && webApp.initData ? webApp.initData : '').trim();
+          if (!initData) {
+            if (attempts < maxAttempts) {
+              setTimeout(run, 250);
+            }
+            return;
+          }
+
+          window.__tgAutoLoginDone = true;
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '{% url "accounts:oauth-telegram-webapp-complete" %}', true);
+          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+          var csrf = getCsrfToken();
+          if (csrf) xhr.setRequestHeader('X-CSRFToken', csrf);
+          xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              window.location.reload();
+            }
+          };
+          xhr.send('init_data=' + encodeURIComponent(initData));
+        }
+
+        run();
+      })();
+
+      function readSkuProducts() {
+        var el = document.getElementById('sku-products-data');
+        if (!el || !el.textContent) return [];
+        try {
+          var raw = JSON.parse(el.textContent);
+          if (!Array.isArray(raw)) return [];
+          return raw.map(function (p) {
+            var copy = Object.assign({}, p);
+            copy.id = Number(copy.id);
+            copy.sort_order = Number(copy.sort_order || 0);
+            copy.attributes = copy.attributes && typeof copy.attributes === 'object' ? copy.attributes : {};
+            copy.price = copy.price != null ? String(copy.price) : '0';
+            copy.old_price =
+              copy.old_price != null && copy.old_price !== '' ? String(copy.old_price) : null;
+            return copy;
+          });
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function readSkuPaymentMethods() {
+        var el = document.getElementById('sku-payment-methods-data');
+        if (!el || !el.textContent) return [];
+        try {
+          var raw = JSON.parse(el.textContent);
+          if (!Array.isArray(raw)) return [];
+          return raw.map(function (m) {
+            return {
+              id: String(m.id || '').trim(),
+              label: String(m.label || '').trim(),
+              sort_order: Number(m.sort_order || 0),
+              min_product_amount: String(m.min_product_amount != null ? m.min_product_amount : '0'),
+              is_stub: Boolean(m.is_stub),
+            };
+          }).filter(function (m) { return m.id && m.label; });
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function readSkuSelectorAxes() {
+        var el = document.getElementById('sku-selector-axes-data');
+        if (!el || !el.textContent) return [];
+        try {
+          var raw = JSON.parse(el.textContent);
+          if (!Array.isArray(raw)) return [];
+          var out = [];
+          raw.forEach(function (x) {
+            var key = String(x || '').trim().toLowerCase();
+            if (!key) return;
+            if (out.some(function (it) { return it.key === key; })) return;
+            out.push({ key: key, label: '' });
+          });
+          return out;
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function readSkuSelectorValueOrder() {
+        var el = document.getElementById('sku-selector-value-order-data');
+        if (!el || !el.textContent) return {};
+        try {
+          var raw = JSON.parse(el.textContent);
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+          var out = {};
+          Object.keys(raw).forEach(function (axisRaw) {
+            var axis = String(axisRaw || '').trim().toLowerCase();
+            if (!axis) return;
+            var valuesRaw = raw[axisRaw];
+            if (!Array.isArray(valuesRaw)) return;
+            var values = [];
+            valuesRaw.forEach(function (v) {
+              var value = String(v || '').trim();
+              if (!value) return;
+              if (values.indexOf(value) !== -1) return;
+              values.push(value);
+            });
+            if (values.length) out[axis] = values;
+          });
+          return out;
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function readSkuUiLabels() {
+        var el = document.getElementById('sku-ui-labels-data');
+        if (!el || !el.textContent) return {};
+        try {
+          var raw = JSON.parse(el.textContent);
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+          return raw;
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function sortNominals(arr) {
+        return arr.slice().sort(function (a, b) {
+          var na = parseFloat(String(a).replace(/[^\d.]/g, ''));
+          var nb = parseFloat(String(b).replace(/[^\d.]/g, ''));
+          if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+          return String(a).localeCompare(String(b));
+        });
+      }
+
+      window.skuConstructorFromDom = function (initialProductId) {
+        return {
+          email: '',
+          promo: '',
+          paymentMethod: 'site_balance',
+          isAuthenticated: false,
+          descriptionTab: 'Description',
+          products: [],
+          paymentMethods: [],
+          selectorAxes: [],
+          selectorValueOrder: {},
+          uiLabels: {},
+          availablePaymentMethods: [],
+          selectedProductId: null,
+          selectedAxisValues: {},
+          quantitySelectionEnabled: false,
+          quantityMin: 1,
+          quantityMax: 1,
+          quantity: 1,
+          cardFallback: '',
+          placeholderHero: '',
+          /** Flat fields — Alpine tracks these reliably (getters on x-data often are not). */
+          listedPrice: '0',
+          listedOldPrice: '-',
+          heroUrl: '',
+          attrChips: {},
+          selectedSkuRows: [],
+          init: function () {
+            this.cardFallback = this.$el.dataset.cardImage || '';
+            this.placeholderHero = this.$el.dataset.placeholderHero || '';
+            this.isAuthenticated = String(this.$el.dataset.userAuthenticated || '').toLowerCase() === 'true';
+            this.quantitySelectionEnabled = String(this.$el.dataset.quantitySelectionEnabled || '').toLowerCase() === 'true';
+            this.quantityMin = Math.max(parseInt(this.$el.dataset.minOrderQuantity || '1', 10) || 1, 1);
+            this.quantityMax = Math.max(parseInt(this.$el.dataset.maxOrderQuantity || '1', 10) || this.quantityMin, this.quantityMin);
+            var defaultQty = parseInt(this.$el.dataset.defaultOrderQuantity || '1', 10) || this.quantityMin;
+            this.quantity = this.normalizeQuantity(defaultQty);
+            this.products = readSkuProducts();
+            this.paymentMethods = readSkuPaymentMethods();
+            this.selectorAxes = readSkuSelectorAxes();
+            this.selectorValueOrder = readSkuSelectorValueOrder();
+            this.uiLabels = readSkuUiLabels();
+            var id =
+              initialProductId != null && initialProductId !== ''
+                ? Number(initialProductId)
+                : null;
+            if (id != null && !isNaN(id) && this.products.some(function (p) { return p.id === id; })) {
+              this.selectedProductId = id;
+            } else {
+              this.selectedProductId = this.products[0] ? this.products[0].id : null;
+            }
+            this.hydrateFromSelection();
+            var self = this;
+            this.$watch('selectedProductId', function () {
+              self.syncDerivedFromSku();
+            });
+            this.$watch('quantity', function (value) {
+              self.quantity = self.normalizeQuantity(value);
+              self.refreshPaymentMethods();
+            });
+            this.syncDerivedFromSku();
+            this.paymentMethod = this.defaultPaymentMethodForCurrentUser();
+            this.$nextTick(function () {
+              self.onMobileBuyBarScroll();
+            });
+          },
+          normalizeQuantity: function (value) {
+            var n = parseInt(value, 10);
+            if (!isFinite(n) || isNaN(n)) n = this.quantityMin;
+            if (!this.quantitySelectionEnabled) return Math.max(this.quantityMin, Math.min(this.quantityMax, n));
+            if (n < this.quantityMin) n = this.quantityMin;
+            if (n > this.quantityMax) n = this.quantityMax;
+            return n;
+          },
+          increaseQuantity: function () {
+            if (!this.quantitySelectionEnabled) return;
+            this.quantity = this.normalizeQuantity((this.quantity || this.quantityMin) + 1);
+          },
+          decreaseQuantity: function () {
+            if (!this.quantitySelectionEnabled) return;
+            this.quantity = this.normalizeQuantity((this.quantity || this.quantityMin) - 1);
+          },
+          orderTotalAmount: function () {
+            var unit = Number(String(this.listedPrice || '0').replace(',', '.'));
+            if (!isFinite(unit)) unit = 0;
+            var qty = this.normalizeQuantity(this.quantity || this.quantityMin);
+            return unit * qty;
+          },
+          orderOldTotalAmount: function () {
+            if (this.listedOldPrice === '-') return 0;
+            var unit = Number(String(this.listedOldPrice || '0').replace(',', '.'));
+            if (!isFinite(unit)) unit = 0;
+            var qty = this.normalizeQuantity(this.quantity || this.quantityMin);
+            return unit * qty;
+          },
+          mobileBuyBarHidden: false,
+          onMobileBuyBarScroll: function () {
+            if (window.matchMedia('(min-width: 721px)').matches) {
+              this.mobileBuyBarHidden = false;
+              return;
+            }
+            var h = window.innerHeight || document.documentElement.clientHeight || 0;
+            var anchor = document.getElementById('pd-checkout-anchor');
+            var hide = false;
+            if (anchor) {
+              var rect = anchor.getBoundingClientRect();
+              var checkoutOnScreen = rect.top < h && rect.bottom > 0;
+              var pastCheckout = rect.bottom < 0;
+              hide = checkoutOnScreen || pastCheckout;
+            }
+            this.mobileBuyBarHidden = hide;
+          },
+          scrollToCheckout: function () {
+            var el = document.getElementById('pd-checkout-anchor');
+            if (!el) return;
+            var headerOffset =
+              typeof window.pdCheckoutScrollOffset === 'number'
+                ? window.pdCheckoutScrollOffset
+                : 120;
+            var y = el.getBoundingClientRect().top + window.scrollY - headerOffset;
+            window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+            setTimeout(function () {
+              var email = document.getElementById('pd-email');
+              if (email && email.focus) email.focus({ preventScroll: true });
+            }, 500);
+          },
+          formatMoney: function (value) {
+            if (value == null || value === '') return '0';
+            var num = Number(String(value).replace(',', '.'));
+            if (!isFinite(num)) return String(value);
+            if (Math.abs(num - Math.round(num)) < 1e-9) return String(Math.round(num));
+            return num.toFixed(2);
+          },
+          syncDerivedFromSku: function () {
+            var p =
+              this.products.find(function (pr) {
+                return pr.id === this.selectedProductId;
+              }.bind(this)) || null;
+            this.listedPrice = p ? this.formatMoney(p.price) : '0';
+            this.listedOldPrice = p && p.old_price ? this.formatMoney(p.old_price) : '-';
+            this.heroUrl = p && p.image_url ? p.image_url : this.cardFallback || this.placeholderHero;
+            this.attrChips = p && p.attributes ? Object.assign({}, p.attributes) : {};
+            this.selectedSkuRows = p && Array.isArray(p.selection_rows) ? p.selection_rows : [];
+            this.refreshPaymentMethods();
+          },
+          refreshPaymentMethods: function () {
+            var current = Number(this.orderTotalAmount() || 0);
+            if (!isFinite(current)) current = 0;
+            this.availablePaymentMethods = this.paymentMethods.filter(function (pm) {
+              var minV = Number(String(pm.min_product_amount || '0').replace(',', '.'));
+              if (!isFinite(minV)) minV = 0;
+              return current >= minV;
+            });
+            if (!this.availablePaymentMethods.length) {
+              this.availablePaymentMethods = [{ id: 'site_balance', label: 'Balance' }];
+            }
+            var hasCurrent = this.availablePaymentMethods.some(function (pm) {
+              return pm.id === this.paymentMethod;
+            }.bind(this));
+            if (!hasCurrent) {
+              this.paymentMethod = this.defaultPaymentMethodForCurrentUser();
+            }
+          },
+          defaultPaymentMethodForCurrentUser: function () {
+            if (!this.availablePaymentMethods.length) return '';
+            if (this.isAuthenticated) {
+              var balanceMethod = this.availablePaymentMethods.find(function (pm) {
+                return pm.id === 'site_balance';
+              });
+              if (balanceMethod) return balanceMethod.id;
+            }
+            var nonBalanceMethod = this.availablePaymentMethods.find(function (pm) {
+              return pm.id !== 'site_balance' && !pm.is_stub;
+            });
+            if (nonBalanceMethod) return nonBalanceMethod.id;
+            var anyNonBalance = this.availablePaymentMethods.find(function (pm) {
+              return pm.id !== 'site_balance';
+            });
+            if (anyNonBalance) return anyNonBalance.id;
+            return this.availablePaymentMethods[0].id;
+          },
+          selectPaymentMethod: function (providerId) {
+            if (!providerId) return;
+            if (!this.isAuthenticated && providerId === 'site_balance') {
+              document.body.dispatchEvent(
+                new CustomEvent('open-auth-modal', {
+                  detail: {
+                    url: '{% url "accounts:auth-modal-login" %}?hint=balance_requires_login',
+                  },
+                })
+              );
+              return;
+            }
+            this.paymentMethod = providerId;
+          },
+          selectedPaymentIsStub: function () {
+            var id = this.paymentMethod;
+            var hit = this.availablePaymentMethods.find(function (pm) {
+              return pm.id === id;
+            });
+            return Boolean(hit && hit.is_stub);
+          },
+          variantLabelForProduct: function (p) {
+            if (!p) return '';
+            var rows = Array.isArray(p.selection_rows) ? p.selection_rows : [];
+            var row = rows.find(function (r) {
+              var lbl = String(r.label || '').toLowerCase();
+              return lbl === 'variant' || lbl === 'вариант';
+            });
+            if (row && row.value != null && String(row.value).trim() !== '') {
+              return String(row.value);
+            }
+            return '#' + p.id + ' · ' + this.formatMoney(p.price);
+          },
+          axisDisplayLabel: function (key) {
+            var k = String(key || '').toLowerCase();
+            var fromUi = this.uiLabels && this.uiLabels[k];
+            if (fromUi != null && String(fromUi).trim() !== '') {
+              return String(fromUi).trim();
+            }
+            var map = {
+              region: 'Region',
+              nominal: 'Denomination',
+              variant: 'Variant',
+              platform: 'Platform',
+              sku: 'SKU',
+              option: 'Option'
+            };
+            if (map[k]) return map[k];
+            return String(key || '').replace(/_/g, ' ').replace(/\b\w/g, function (ch) { return ch.toUpperCase(); });
+          },
+          axisValueForProduct: function (p, key) {
+            if (!p) return '';
+            var k = String(key || '').toLowerCase();
+            if (k === 'variant') return '#' + p.id;
+            var at = p.attributes || {};
+            var v = at[k];
+            if (v == null || v === '') return '';
+            return String(v);
+          },
+          visibleSelectorAxes: function () {
+            var axes = Array.isArray(this.selectorAxes) ? this.selectorAxes.slice() : [];
+            if (!axes.length) {
+              var hasRegion = this.products.some(function (p) { return p.attributes && p.attributes.region != null && p.attributes.region !== ''; });
+              var hasNominal = this.products.some(function (p) { return p.attributes && p.attributes.nominal != null && p.attributes.nominal !== ''; });
+              if (hasRegion) axes.push({ key: 'region', label: 'Region' });
+              if (hasNominal) axes.push({ key: 'nominal', label: 'Denomination' });
+              if (this.products.length > 1) axes.push({ key: 'variant', label: 'Variant' });
+            }
+            return axes
+              .map(function (a) {
+                var key = String((a && a.key) || '').trim().toLowerCase();
+                if (!key) return null;
+                var label = String((a && a.label) || '').trim();
+                return { key: key, label: label || this.axisDisplayLabel(key) };
+              }.bind(this))
+              .filter(function (a) { return !!a; })
+              .filter(function (a, idx, arr) { return arr.findIndex(function (x) { return x.key === a.key; }) === idx; })
+              .filter(function (a) {
+                return this.products.some(function (p) { return !!this.axisValueForProduct(p, a.key); }.bind(this));
+              }.bind(this));
+          },
+          candidatesForAxisIndex: function (axes, axisIdx) {
+            var candidates = this.products.slice();
+            for (var i = 0; i < axisIdx; i += 1) {
+              var key = axes[i] && axes[i].key;
+              if (!key) continue;
+              var selected = this.selectedAxisValues[key];
+              if (!selected) continue;
+              candidates = candidates.filter(function (p) {
+                return String(this.axisValueForProduct(p, key)) === String(selected);
+              }.bind(this));
+            }
+            return candidates;
+          },
+          optionsForAxis: function (key, axisIdx) {
+            var axes = this.visibleSelectorAxes();
+            var set = new Set();
+            var candidates = this.candidatesForAxisIndex(axes, axisIdx);
+            this.candidatesForAxisIndex(axes, axisIdx).forEach(function (p) {
+              var val = this.axisValueForProduct(p, key);
+              if (val) set.add(String(val));
+            }.bind(this));
+            var arr = Array.from(set);
+            var axisKey = String(key || '').toLowerCase();
+            var configuredOrder = this.selectorValueOrder && this.selectorValueOrder[axisKey];
+            var valueSortRank = {};
+            candidates.forEach(function (p) {
+              var v = String(this.axisValueForProduct(p, axisKey) || '');
+              if (!v) return;
+              var rank = [Number(p.sort_order || 0), Number(p.id || 0)];
+              if (!Object.prototype.hasOwnProperty.call(valueSortRank, v)) {
+                valueSortRank[v] = rank;
+                return;
+              }
+              var existing = valueSortRank[v];
+              if (rank[0] < existing[0] || (rank[0] === existing[0] && rank[1] < existing[1])) {
+                valueSortRank[v] = rank;
+              }
+            }.bind(this));
+            if (Array.isArray(configuredOrder) && configuredOrder.length) {
+              var rankMap = {};
+              configuredOrder.forEach(function (value, idx) {
+                rankMap[String(value)] = idx;
+              });
+              return arr.sort(function (a, b) {
+                var aKey = String(a);
+                var bKey = String(b);
+                var aRank = Object.prototype.hasOwnProperty.call(rankMap, aKey) ? rankMap[aKey] : Number.POSITIVE_INFINITY;
+                var bRank = Object.prototype.hasOwnProperty.call(rankMap, bKey) ? rankMap[bKey] : Number.POSITIVE_INFINITY;
+                if (aRank !== bRank) return aRank - bRank;
+                var aProductRank = Object.prototype.hasOwnProperty.call(valueSortRank, aKey) ? valueSortRank[aKey] : [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+                var bProductRank = Object.prototype.hasOwnProperty.call(valueSortRank, bKey) ? valueSortRank[bKey] : [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+                if (aProductRank[0] !== bProductRank[0]) return aProductRank[0] - bProductRank[0];
+                if (aProductRank[1] !== bProductRank[1]) return aProductRank[1] - bProductRank[1];
+                return aKey.localeCompare(bKey);
+              });
+            }
+            if (axisKey === 'nominal') {
+              return sortNominals(arr);
+            }
+            if (axisKey === 'variant') {
+              return arr.sort(function (a, b) {
+                var na = Number(String(a).replace(/[^\d-]/g, ''));
+                var nb = Number(String(b).replace(/[^\d-]/g, ''));
+                if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+                return String(a).localeCompare(String(b));
+              });
+            }
+            return arr.sort(function (a, b) {
+              var aKey = String(a);
+              var bKey = String(b);
+              var aProductRank = Object.prototype.hasOwnProperty.call(valueSortRank, aKey) ? valueSortRank[aKey] : [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+              var bProductRank = Object.prototype.hasOwnProperty.call(valueSortRank, bKey) ? valueSortRank[bKey] : [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+              if (aProductRank[0] !== bProductRank[0]) return aProductRank[0] - bProductRank[0];
+              if (aProductRank[1] !== bProductRank[1]) return aProductRank[1] - bProductRank[1];
+              return aKey.localeCompare(bKey);
+            });
+          },
+          ensureAxisSelections: function () {
+            var axes = this.visibleSelectorAxes();
+            axes.forEach(function (axis, idx) {
+              var opts = this.optionsForAxis(axis.key, idx);
+              var cur = this.selectedAxisValues[axis.key];
+              if (!opts.length) {
+                delete this.selectedAxisValues[axis.key];
+                return;
+              }
+              var curStr = cur != null ? String(cur) : '';
+              var stillValid = opts.some(function (x) { return String(x) === curStr; });
+              if (!stillValid) {
+                this.selectedAxisValues[axis.key] = String(opts[0]);
+              }
+            }.bind(this));
+          },
+          selectedValueForAxis: function (key) {
+            var v = this.selectedAxisValues[key];
+            return v != null ? String(v) : '';
+          },
+          selectAxisValue: function (key, value) {
+            var axes = this.visibleSelectorAxes();
+            var idx = axes.findIndex(function (a) { return a.key === key; });
+            this.selectedAxisValues[key] = String(value || '');
+            if (idx >= 0) {
+              for (var i = idx + 1; i < axes.length; i += 1) {
+                delete this.selectedAxisValues[axes[i].key];
+              }
+            }
+            this.ensureAxisSelections();
+            this.resolveProductId();
+          },
+          buildSpecsText: function () {
+            var a = this.attrChips || {};
+            var parts = [];
+            Object.keys(a).forEach(function (k) {
+              parts.push(k + ': ' + a[k]);
+            });
+            parts.push('Price: ' + this.listedPrice);
+            if (parts.length <= 1) {
+              return 'Select a product variant — specs will appear here.';
+            }
+            return parts.join('. ');
+          },
+          hydrateFromSelection: function () {
+            var p =
+              this.products.find(function (x) {
+                return x.id === this.selectedProductId;
+              }.bind(this)) || this.products[0];
+            if (!p) {
+              this.selectedProductId = null;
+              return;
+            }
+            this.selectedAxisValues = {};
+            var axes = this.visibleSelectorAxes();
+            axes.forEach(function (axis) {
+              var current = this.axisValueForProduct(p, axis.key);
+              if (current) this.selectedAxisValues[axis.key] = String(current);
+            }.bind(this));
+            axes.forEach(function (axis, idx) {
+              if (this.selectedAxisValues[axis.key]) return;
+              var opts = this.optionsForAxis(axis.key, idx);
+              if (opts.length) this.selectedAxisValues[axis.key] = String(opts[0]);
+            }.bind(this));
+            this.ensureAxisSelections();
+            this.resolveProductId();
+          },
+          resolveProductId: function () {
+            this.ensureAxisSelections();
+            var axes = this.visibleSelectorAxes();
+            var candidates = this.products.filter(function (p) {
+              return axes.every(function (axis) {
+                var selected = this.selectedAxisValues[axis.key];
+                if (!selected) return true;
+                return String(this.axisValueForProduct(p, axis.key)) === String(selected);
+              }.bind(this));
+            }.bind(this));
+            if (candidates.length === 1) {
+              this.selectedProductId = candidates[0].id;
+            } else if (candidates.length) {
+              var still = candidates.find(function (p) {
+                return p.id === this.selectedProductId;
+              }.bind(this));
+              this.selectedProductId = still ? still.id : candidates[0].id;
+            }
+            this.syncDerivedFromSku();
+          },
+          get selectedAttrs() {
+            return this.attrChips;
+          },
+        };
+      };
+    })();
+  </script>
+  <script>
+    (function () {
+      var TTL_MS = 10000;
+      var FADE_MS = 350;
+      var ITEM_SEL = '.msg-oob__item';
+      function mark(el) {
+        if (!el || !el.classList) return;
+        if (!el.classList.contains('msg-oob__item')) return;
+        if (el.getAttribute('data-msg-ttl') === '1') return;
+        if (!el.closest || !el.closest('#django-messages')) return;
+        el.setAttribute('data-msg-ttl', '1');
+        setTimeout(function () {
+          el.classList.add('is-leaving');
+          setTimeout(function () {
+            if (el.parentNode) el.remove();
+          }, FADE_MS);
+        }, TTL_MS);
+      }
+      function markAdded(n) {
+        if (n.nodeType !== 1) return;
+        if (n.matches && n.matches(ITEM_SEL) && n.closest('#django-messages')) {
+          mark(n);
+        }
+        if (n.querySelectorAll) {
+          n.querySelectorAll(ITEM_SEL).forEach(function (sub) {
+            if (sub.closest('#django-messages')) mark(sub);
+          });
+        }
+      }
+      var c = document.getElementById('django-messages');
+      if (c) c.querySelectorAll(ITEM_SEL).forEach(mark);
+      if (window.MutationObserver) {
+        new MutationObserver(function (recs) {
+          recs.forEach(function (r) {
+            r.addedNodes.forEach(markAdded);
+          });
+        }).observe(document.body, { childList: true, subtree: true });
+      }
+    })();
+  </script>
+</body>
+
+</html>

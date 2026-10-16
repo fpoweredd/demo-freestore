@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Top up balance - FreeStorex{% endblock %}
+
+{% block content %}
+<style>
+  .account-page{padding-top:18px}
+  @media (max-width:899px){.account-page{padding-top:14px}}
+  .account-page .profile-layout{display:grid;grid-template-columns:260px 1fr;grid-template-areas:"nav main";gap:26px;align-items:start}
+  .account-page .profile-nav{grid-area:nav;background:var(--bg-card);border:1px solid rgba(255,255,255,.06);border-radius:20px;padding:10px;display:grid;gap:8px}
+  .account-page .profile-layout > .section{grid-area:main}
+  .account-page .profile-btn{width:100%;min-height:180px;display:flex;align-items:center;justify-content:flex-start;font-size:34px;font-weight:900;letter-spacing:-.02em}
+  .account-page .profile-btn.active{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.08)}
+  @media (max-width: 899px) {
+    .account-page .profile-layout {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "main"
+        "nav";
+      gap: 16px;
+    }
+    .account-page .profile-nav {
+      grid-area: nav;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 6px;
+      padding: 8px 10px;
+      margin: 0;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(12, 13, 15, 0.92);
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    }
+    .account-page .profile-btn {
+      flex: 1;
+      min-width: 0;
+      min-height: 44px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0;
+      padding: 8px 6px;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.2;
+    }
+  }
+</style>
+<section class="account-page" hx-boost="false">
+{% include "accounts/partials/account_balance_page_content.html" %}
+</section>
+{% endblock %}

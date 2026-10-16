@@ -1,0 +1,32 @@
+{% if request.user.is_authenticated %}
+  <div class="auth-wrap auth-wrap-js" data-auth-wrap>
+    <button type="button" class="auth-btn user-balance-btn" data-auth-menu-toggle aria-expanded="false">
+      <div class="balance-stack">
+        <div class="balance-rub">{{ header_balance_rub }}</div>
+      </div>
+      <div class="user-avatar" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M20 21a8 8 0 0 0-16 0"></path>
+          <circle cx="12" cy="8" r="4"></circle>
+        </svg>
+      </div>
+    </button>
+    <div class="user-menu">
+      <div class="user-menu-head">
+        <div style="font-weight: 900">{{ request.user.email|default:request.user.username }}</div>
+        <div class="user-menu-id">ID: {{ request.user.account_profile.public_id|default:"-" }}</div>
+      </div>
+      <a class="user-menu-btn" href="{% url 'accounts:balance' %}?next={{ request.get_full_path|urlencode }}" hx-boost="false">{{ ui.accounts.nav.top_up }}</a>
+      <a class="user-menu-btn" href="{% url 'accounts:profile' %}" hx-boost="false">{{ ui.accounts.nav.profile }}</a>
+      <a class="user-menu-btn" href="{% url 'accounts:orders' %}" hx-boost="false">{{ ui.accounts.nav.orders }}</a>
+      {% comment %}<button type="button" class="user-menu-btn">Referrals</button>{% endcomment %}
+
+      <form method="post" action="{% url 'accounts:logout' %}" hx-post="{% url 'accounts:logout' %}" hx-swap="none">
+        {% csrf_token %}
+        <button type="submit" class="user-menu-btn danger">{{ ui.accounts.nav.logout }}</button>
+      </form>
+    </div>
+  </div>
+{% else %}
+  <button type="button" class="auth-btn" @click="openModal('{% url "accounts:auth-modal-login" %}')">{{ ui.accounts.nav.login }}</button>
+{% endif %}

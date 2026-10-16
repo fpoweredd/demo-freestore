@@ -1,0 +1,7 @@
+{% if messages %}
+<div id="django-messages" hx-swap-oob="true" class="msg-oob" role="status" style="display:none;">
+  {% for message in messages %}
+    <div class="msg-oob__item msg-oob__item--{{ message.tags|default:'info' }}">{{ message }}</div>
+  {% endfor %}
+</div>
+{% endif %}

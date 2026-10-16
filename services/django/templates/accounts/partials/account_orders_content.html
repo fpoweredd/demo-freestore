@@ -1,0 +1,84 @@
+<div class="profile-hero">
+  <h2 style="margin:0 0 6px;font-size:34px;">My orders</h2>
+  <p class="muted" style="margin:0;">Active orders and purchase history.</p>
+</div>
+
+<div style="margin-top:16px;">
+  <h3 style="margin-top:0;">Active orders</h3>
+  {% if active_orders %}
+    <div class="orders-grid">
+      {% for o in active_orders %}
+        <a class="order-card" href="{{ o.url }}" hx-get="{{ o.url }}" style="color:inherit;">
+          <div class="order-thumb">{{ o.title|slice:":1"|upper }}</div>
+          <div>
+            <div style="font-weight:800;margin-bottom:4px;">{{ o.title }}</div>
+            <div style="font-size:22px;font-weight:900;margin-bottom:8px;">{{ o.total }} {{ o.currency }}</div>
+            <span class="status-badge {{ o.status_badge_class }}">{{ o.status_label }}</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted" style="margin:10px 0 0;">No active orders.</p>
+  {% endif %}
+</div>
+
+<div style="margin-top:16px;">
+  <h3>Purchase history</h3>
+  {% if history_orders %}
+    <div class="history-list">
+    {% for o in history_orders %}
+      <a href="{{ o.url }}" hx-get="{{ o.url }}" class="history-card">
+        <div class="history-desktop">
+          <div class="history-head">
+            <div>
+              <h4 class="history-title">{{ o.title }}</h4>
+              <p class="history-meta">Order: {{ o.public_id }} · {{ o.created_at|date:"d/m/Y H:i" }} (UTC)</p>
+            </div>
+            <div class="history-aside">
+              <span class="status-badge {{ o.status_badge_class }}">{{ o.status_label }}</span>
+              <div class="history-total">{{ o.total }} {{ o.currency }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="history-mobile">
+          <h4 class="history-title">{{ o.title }}</h4>
+          <p class="history-meta">Order: {{ o.public_id }}</p>
+          <p class="history-meta">{{ o.created_at|date:"d/m/Y H:i" }} (UTC)</p>
+          <div class="history-status-row">
+            <span class="status-badge {{ o.status_badge_class }}">{{ o.status_label }}</span>
+          </div>
+          <div class="history-divider" aria-hidden="true"></div>
+          <div class="history-total">{{ o.total }} {{ o.currency }}</div>
+        </div>
+      </a>
+    {% endfor %}
+    </div>
+
+    {% if history_page and history_page.paginator.num_pages > 1 %}
+      <div class="history-pagination">
+        {% if history_page.has_previous %}
+          <a class="action-btn"
+             href="{% url 'accounts:orders' %}?hist_page={{ history_page.previous_page_number }}"
+             hx-get="{% url 'accounts:orders' %}?hist_page={{ history_page.previous_page_number }}">
+            ← Back
+          </a>
+        {% endif %}
+
+        <span class="muted" style="font-size:13px;">
+          Page {{ history_page.number }} of {{ history_page.paginator.num_pages }}
+        </span>
+
+        {% if history_page.has_next %}
+          <a class="action-btn"
+             href="{% url 'accounts:orders' %}?hist_page={{ history_page.next_page_number }}"
+             hx-get="{% url 'accounts:orders' %}?hist_page={{ history_page.next_page_number }}">
+            Next →
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <p class="muted" style="margin:10px 0 0;">No purchase history yet.</p>
+  {% endif %}
+</div>

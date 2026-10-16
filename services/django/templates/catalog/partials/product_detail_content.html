@@ -1,0 +1,456 @@
+{% include "partials/messages.html" %}
+{% load catalog_extras %}
+
+{{ products_for_js|json_script:"sku-products-data" }}
+{{ payment_methods_for_js|json_script:"sku-payment-methods-data" }}
+{{ selector_axes_for_js|json_script:"sku-selector-axes-data" }}
+{{ selector_value_order_for_js|json_script:"sku-selector-value-order-data" }}
+{{ ui_labels|json_script:"sku-ui-labels-data" }}
+{{ input_fields_validation|json_script:"sku-input-validation-rules" }}
+
+<div
+  class="container pd-page-product"
+  data-card-image="{{ card_hero_fallback }}"
+  data-placeholder-hero="https://placehold.co/900x900/171c25/ffffff?text={{ card.name|urlencode }}"
+  data-user-authenticated="{{ request.user.is_authenticated|yesno:'true,false' }}"
+  data-quantity-selection-enabled="{{ quantity_selection_enabled|yesno:'true,false' }}"
+  data-min-order-quantity="{{ min_order_quantity }}"
+  data-max-order-quantity="{{ max_order_quantity }}"
+  data-default-order-quantity="{{ default_order_quantity }}"
+  x-data="skuConstructorFromDom({% if selected_product %}{{ selected_product.id }}{% else %}null{% endif %})"
+  @scroll.window="onMobileBuyBarScroll()"
+>
+  <div class="spacer"></div>
+
+  <div class="breadcrumbs">
+    <a class="small-btn" href="{% url 'catalog:home' %}" hx-get="{% url 'catalog:home' %}">Home</a>
+    <span>›</span>
+    <a href="{% url 'catalog:home' %}" hx-get="{% url 'catalog:home' %}">Catalog</a>
+    <span>›</span>
+    <span style="color:#fff">{{ card.name }}</span>
+  </div>
+
+  <div class="layout-2">
+    <div style="display:grid;gap:16px;">
+      {# Top: image + option selectors #}
+      <section class="section">
+        <div class="product-main-grid">
+          <div class="product-image-card">
+            <img :src="heroUrl" alt="{{ card.name }}" width="600" height="600">
+          </div>
+          <div class="product-main-right">
+            <div class="product-title-row">
+              <h1 class="product-detail-h1">{{ card.name }}</h1>
+            </div>
+
+            <div class="meta-row">
+              <div class="meta-item">
+                {{ ui_labels.fulfillment_prefix }} {{ fulfillment_label }}
+              </div>
+              <div class="meta-item">📱 {{ card.category.name }}</div>
+                {% comment %}<div class="meta-item">👥 {{ card.unique_buyers_count }} {{ ui_labels.buyers_suffix }}</div>{% endcomment %}
+              <template x-if="hasRegionAxis">
+                <div class="meta-item"><span>🌍 </span><span x-text="selectedRegion || '—'"></span></div>
+              </template>
+            </div>
+
+            <template x-for="(axis, idx) in visibleSelectorAxes()" :key="axis.key">
+              <div style="display:grid;gap:8px;">
+                <p class="panel-title">
+                  <span x-text="axis.label"></span>: <span x-text="selectedValueForAxis(axis.key) || '—'"></span>
+                </p>
+                <div class="option-chips">
+                  <template x-for="v in optionsForAxis(axis.key, idx)" :key="axis.key + ':' + v">
+                    <button
+                      type="button"
+                      class="chip"
+                      :class="{ active: String(selectedValueForAxis(axis.key) || '') === String(v) }"
+                      @click="selectAxisValue(axis.key, v)"
+                      x-text="v"
+                    ></button>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            {% if input_fields or show_telegram_handle_field %}
+            <div style="display:grid;gap:10px;">
+              <p class="panel-title">{{ ui_labels.order_data }}</p>
+              {% for field in input_fields %}
+              <div>
+                <label class="panel-title" for="pd-field-{{ field.id }}">
+                  {{ field.label }}{% if field.is_required %} *{% endif %}
+                </label>
+                {% if field.field_type == "textarea" %}
+                <textarea id="pd-field-{{ field.id }}" name="input__{{ field.key }}" class="field" rows="3"
+                  placeholder="{{ field.placeholder }}" data-pd-input-key="{{ field.key }}"
+                  {% if field.is_required %}required data-order-required="1"{% endif %}></textarea>
+                {% elif field.field_type == "password" %}
+                <div style="position:relative;">
+                  <input
+                    id="pd-field-{{ field.id }}"
+                    name="input__{{ field.key }}"
+                    class="field"
+                    type="password"
+                    placeholder="{{ field.placeholder }}"
+                    style="padding-right:44px;"
+                    data-pd-input-key="{{ field.key }}"
+                    {% if field.is_required %}required data-order-required="1"{% endif %}
+                  >
+                  <button
+                    type="button"
+                    title="Show or hide password"
+                    aria-label="Toggle password visibility"
+                    onclick="(function(btn){var input=btn.previousElementSibling;if(!input)return;var hidden=input.type==='password';input.type=hidden?'text':'password';btn.setAttribute('aria-pressed', hidden?'true':'false');})(this);"
+                    style="position:absolute;right:8px;top:55%;transform:translateY(-50%);width:30px;height:30px;border:0;background:transparent;color:#cbd5e1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;"
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                </div>
+                {% else %}
+                <input id="pd-field-{{ field.id }}" name="input__{{ field.key }}" class="field" type="{{ field.field_type }}"
+                  placeholder="{{ field.placeholder }}" data-pd-input-key="{{ field.key }}"
+                  {% if field.is_required %}required data-order-required="1"{% endif %}>
+                {% endif %}
+                {% if field.help_text %}
+                <div class="muted" style="font-size:11px;margin-top:4px;">{{ field.help_text }}</div>
+                {% endif %}
+              </div>
+              {% endfor %}
+              {% if show_telegram_handle_field %}
+              <div>
+                <label class="panel-title" for="pd-field-telegram-handle">
+                  Telegram for contact
+                </label>
+                <input
+                  id="pd-field-telegram-handle"
+                  name="input__telegram_handle"
+                  class="field"
+                  type="text"
+                  placeholder="@username"
+                  data-pd-input-key="telegram_handle"
+                  value="{% if telegram_handle_prefill %}@{{ telegram_handle_prefill|cut:'@' }}{% endif %}"
+                >
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      {# Bottom: product description #}
+      <section class="section" style="display:grid;gap:14px;">
+        <h2 style="margin:0;font-size:28px;font-weight:900;">Product description</h2>
+        <div class="description-tabs" role="tablist">
+          <button type="button" class="description-tab" :class="{ active: descriptionTab === 'Description' }"
+            @click="descriptionTab = 'Description'">Description</button>
+          <button type="button" class="description-tab"
+            :class="{ active: descriptionTab === 'Activation instructions' }"
+            @click="descriptionTab = 'Activation instructions'">Instructions</button>
+          <!-- <button type="button" class="description-tab" :class="{ active: descriptionTab === 'Specs' }"
+            @click="descriptionTab = 'Specs'">Specs</button> -->
+        </div>
+        <div class="tag-list">
+          {% for t in card.public_tags|csv_tags %}
+            <span class="tag">{{ t }}</span>
+          {% endfor %}
+          <template x-for="value in Object.values(attrChips || {})" :key="String(value)">
+            <span class="tag" x-text="value"></span>
+          </template>
+        </div>
+        <div class="muted" style="margin:0" x-show="descriptionTab === 'Description'">
+          {{ card.description_md|default:card.description|default:"Description coming soon."|render_markdown }}
+        </div>
+        <div class="muted" style="margin:0" x-show="descriptionTab === 'Activation instructions'">
+          {{ card.instruction_md|default:"After purchase you will receive delivery details or a service confirmation by email. Check your inbox and keep the data. If you have any questions, contact our support team."|render_markdown }}
+        </div>
+        <p class="muted" style="margin:0" x-show="descriptionTab === 'Specs'" x-text="buildSpecsText()"></p>
+      </section>
+    </div>
+
+    <aside id="pd-checkout-anchor" class="sidebar" style="display:grid;gap:14px;" tabindex="-1">
+      <input id="pd-csrf" type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+      <form
+        {% if request.user.is_authenticated and not request.user.email %}
+          hx-post="{% url 'accounts:set-email-once' %}"
+          hx-trigger="change delay:500ms, blur"
+          hx-include="#pd-csrf,#pd-email"
+          hx-swap="none"
+        {% endif %}
+        style="display:block;"
+      >
+        {% csrf_token %}
+        <label class="panel-title" for="pd-email">Your email *</label>
+        <input
+          id="pd-email"
+          class="field"
+          type="email"
+          name="email"
+          placeholder="email@example.com"
+          x-model="email"
+          {% if request.user.is_authenticated and request.user.email %}
+            value="{{ request.user.email }}"
+            x-init="if (!email) { email = '{{ request.user.email|escapejs }}' }"
+          {% endif %}
+        >
+      </form>
+
+      <div>
+        <div x-show="quantitySelectionEnabled" style="margin-bottom:12px;">
+          <p class="panel-title" style="margin-bottom:8px;">Quantity</p>
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;">
+            <button
+              type="button"
+              class="action-btn"
+              style="padding:0 12px;height:44px;"
+              @click="decreaseQuantity()"
+              :disabled="quantity <= quantityMin"
+            >-</button>
+            <input
+              class="field"
+              style="margin-top:0;text-align:center;"
+              type="number"
+              x-model.number="quantity"
+              :min="quantityMin"
+              :max="quantityMax"
+            >
+            <button
+              type="button"
+              class="action-btn"
+              style="padding:0 12px;height:44px;"
+              @click="increaseQuantity()"
+              :disabled="quantity >= quantityMax"
+            >+</button>
+          </div>
+        </div>
+        <p class="panel-title" style="margin-bottom:8px;">{{ ui_labels.payment_method }}</p>
+        <div class="pay-grid">
+          <template x-for="pm in availablePaymentMethods" :key="pm.id">
+            <button
+              type="button"
+              class="pay-item"
+              :class="{ active: paymentMethod === pm.id }"
+              :style="pm.is_stub ? 'opacity:.75;' : ''"
+              @click="selectPaymentMethod(pm.id)"
+              x-text="pm.label"
+            ></button>
+          </template>
+        </div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0;" x-show="selectedPaymentIsStub()">Coming soon — please choose another payment method.</p>
+      </div>
+
+      <div>
+        <p class="panel-title" style="margin-bottom:8px;">{{ ui_labels.promo_code }}</p>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;">
+          <input class="field" style="margin-top:0" type="text" placeholder="Enter promo code" x-model="promo">
+          <button type="button" class="action-btn" style="padding:0 14px">Apply</button>
+        </div>
+      </div>
+
+      <div class="price-summary">
+        <div class="price-line">
+          <span class="muted">{{ ui_labels.price }}</span>
+          <span class="price-line-value"><span x-text="listedPrice"></span> $</span>
+        </div>
+        <div x-show="listedOldPrice !== '-'" class="price-line">
+          <span class="muted">{{ ui_labels.old_price }}</span>
+          <span class="muted price-line-value"><s><span x-text="listedOldPrice"></span> $</s></span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:30px;font-weight:900;">
+        <span style="font-size:20px;">{{ ui_labels.total }}</span>
+        <span><span x-text="formatMoney(orderTotalAmount())"></span> $</span>
+      </div>
+      <form
+        hx-post="{% url 'orders-web:order-create' %}"
+        hx-target="#main-content"
+        hx-swap="innerHTML"
+        hx-push-url="false"
+        hx-include="#pd-csrf,#pd-email,[id^='pd-field-']"
+        novalidate
+        onsubmit="return typeof window.pdRunBuyFormGuard !== 'function' || window.pdRunBuyFormGuard();"
+        style="display:grid;gap:8px;"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="product_id" :value="selectedProductId || ''">
+        <input type="hidden" name="quantity" :value="quantity">
+        <input type="hidden" name="guest_email" :value="email || ''">
+        <input type="hidden" name="provider" :value="paymentMethod || ''">
+        <button type="submit" class="buy" {% if not shop_buy_enabled %}disabled style="opacity:.65;cursor:not-allowed;"{% endif %}>Buy</button>
+        <p id="pd-buy-validation-summary" class="pd-buy-validation-summary" style="display:none;" aria-live="polite"></p>
+      </form>
+      {% if not shop_buy_enabled %}
+      <p class="muted" style="font-size:12px;margin:0;text-align:center;">Purchases are temporarily disabled.</p>
+      {% endif %}
+      <p class="muted" style="font-size:10px;margin:0;text-align:center;">By placing an order, you confirm that you have read and agree to the Terms of Service and Privacy Policy</p>
+    </aside>
+  </div>
+
+  {# Teleport to body so position:fixed is viewport-relative (#main-content uses transform in main-fade). #}
+  <template x-teleport="body">
+    <div
+      class="pd-mobile-buy-bar"
+      :class="{ 'pd-mobile-buy-bar--hidden': mobileBuyBarHidden }"
+      role="region"
+      aria-label="Checkout summary"
+      :aria-hidden="mobileBuyBarHidden"
+    >
+      <div class="pd-mobile-buy-bar__inner">
+        <div class="pd-mobile-buy-bar__price">
+          <span class="pd-mobile-buy-bar__total">
+            <span x-text="formatMoney(orderTotalAmount())"></span>
+            <span class="pd-mobile-buy-bar__currency">$</span>
+          </span>
+        </div>
+        <button
+          type="button"
+          class="pd-mobile-buy-bar__cta buy"
+          :tabindex="mobileBuyBarHidden ? -1 : 0"
+          @click="scrollToCheckout()"
+          {% if not shop_buy_enabled %}disabled{% endif %}
+        >Buy</button>
+      </div>
+    </div>
+  </template>
+
+  <div class="spacer"></div>
+  <script>
+  (function () {
+    function pdReadRules() {
+      var el = document.getElementById('sku-input-validation-rules');
+      if (!el || !el.textContent) return [];
+      try { return JSON.parse(el.textContent); } catch (e) { return []; }
+    }
+    function pdSetBuySummary(text, show) {
+      var el = document.getElementById('pd-buy-validation-summary');
+      if (!el) return;
+      el.textContent = text || '';
+      el.style.display = show && text ? 'block' : 'none';
+    }
+    window.pdClearCheckoutFieldValidation = function () {
+      document.querySelectorAll('.field[data-pd-input-key], #pd-email').forEach(function (el) {
+        el.classList.remove('field--invalid');
+      });
+      pdSetBuySummary('', false);
+    };
+    function pdGuestEmailLooksValid(v) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || '').trim());
+    }
+    function regexFullMatch(pattern, value) {
+      if (!pattern) return true;
+      try {
+        if (pattern.charAt(0) === '^' && pattern.charAt(pattern.length - 1) === '$') {
+          return new RegExp(pattern).test(value);
+        }
+        return new RegExp('^(?:' + pattern + ')$').test(value);
+      } catch (e) {
+        return true;
+      }
+    }
+    window.pdRunBuyFormGuard = function () {
+      window.pdClearCheckoutFieldValidation();
+      var msgs = [];
+      var root = document.querySelector('[data-user-authenticated]');
+      var isAuth = root && String(root.getAttribute('data-user-authenticated')) === 'true';
+      var emailInput = document.getElementById('pd-email');
+      var emailVal = emailInput ? String(emailInput.value || '').trim() : '';
+      if (!isAuth && !pdGuestEmailLooksValid(emailVal)) {
+        if (emailInput) emailInput.classList.add('field--invalid');
+        msgs.push('Enter a valid email for the receipt and order delivery.');
+      }
+      var rules = pdReadRules();
+      var i;
+      for (i = 0; i < rules.length; i++) {
+        var r = rules[i];
+        var inp = document.getElementById(r.field_dom_id);
+        var raw = inp ? String(inp.value || '').trim() : '';
+        if (r.is_required && !raw) {
+          if (inp) inp.classList.add('field--invalid');
+          msgs.push((r.label || r.key || 'Field') + ': required.');
+          continue;
+        }
+        if (!raw) continue;
+        if (r.field_type === 'email' && !pdGuestEmailLooksValid(raw)) {
+          if (inp) inp.classList.add('field--invalid');
+          msgs.push((r.label || 'Email') + ': invalid email.');
+          continue;
+        }
+        if (r.field_type === 'number') {
+          var num = parseFloat(raw.replace(',', '.'));
+          if (Number.isNaN(num)) {
+            if (inp) inp.classList.add('field--invalid');
+            msgs.push((r.label || 'Number') + ': enter a valid number.');
+            continue;
+          }
+          if (r.min_value != null && r.min_value !== '') {
+            var mn = parseFloat(r.min_value);
+            if (!Number.isNaN(mn) && num < mn) {
+              if (inp) inp.classList.add('field--invalid');
+              msgs.push((r.label || r.key) + ': value is below the minimum allowed.');
+              continue;
+            }
+          }
+          if (r.max_value != null && r.max_value !== '') {
+            var mx = parseFloat(r.max_value);
+            if (!Number.isNaN(mx) && num > mx) {
+              if (inp) inp.classList.add('field--invalid');
+              msgs.push((r.label || r.key) + ': value is above the maximum allowed.');
+              continue;
+            }
+          }
+        }
+        if (r.regex && !regexFullMatch(r.regex, raw)) {
+          if (inp) inp.classList.add('field--invalid');
+          msgs.push((r.label || r.key) + ': invalid format.');
+          continue;
+        }
+        if (r.max_length != null && raw.length > r.max_length) {
+          if (inp) inp.classList.add('field--invalid');
+          msgs.push((r.label || r.key) + ': value is too long.');
+        }
+      }
+      if (!msgs.length) return true;
+      pdSetBuySummary(msgs.slice(0, 4).join(' '), true);
+      return false;
+    };
+    window.applyProductDetailValidationErrors = function (payload) {
+      window.pdClearCheckoutFieldValidation();
+      if (!payload || !payload.errors) return;
+      var errs = payload.errors;
+      Object.keys(errs).forEach(function (key) {
+        if (key === '__all__') return;
+        if (key === 'guest_email') {
+          var em = document.getElementById('pd-email');
+          if (em) em.classList.add('field--invalid');
+          return;
+        }
+        var esc = key.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var el = document.querySelector('[data-pd-input-key="' + esc + '"]');
+        if (el) el.classList.add('field--invalid');
+      });
+      var summary = String(payload.summary || '').trim();
+      if (!summary) {
+        var parts = [];
+        Object.keys(errs).forEach(function (k) {
+          (errs[k] || []).forEach(function (m) {
+            var t = String(m || '').trim();
+            if (t) parts.push(t);
+          });
+        });
+        summary = parts.slice(0, 4).join(' ');
+      }
+      pdSetBuySummary(summary, !!summary);
+    };
+    document.body.addEventListener('input', function (e) {
+      var t = e.target;
+      if (!t || !t.matches || !t.matches('.field[data-pd-input-key], #pd-email')) return;
+      t.classList.remove('field--invalid');
+      pdSetBuySummary('', false);
+    });
+  })();
+  </script>
+</div>

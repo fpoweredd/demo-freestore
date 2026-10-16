@@ -1,0 +1,159 @@
+{% include "partials/messages.html" %}
+
+<div class="container">
+  <div
+    id="order-copy-toast"
+    style="position:fixed;right:20px;bottom:20px;z-index:120;opacity:0;transform:translateY(8px);transition:opacity .2s ease, transform .2s ease;background:rgba(15,23,42,.96);border:1px solid rgba(148,163,184,.45);border-radius:10px;padding:10px 12px;color:#e2e8f0;font-size:13px;pointer-events:none;"
+  >Order number copied</div>
+  <div class="spacer"></div>
+  <section
+    id="order-page-live-section"
+    class="section"
+    style="display:grid;gap:16px;"
+  >
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+      <div>
+        <h1 class="product-detail-h1" style="margin:0;">
+          Order #
+          <code
+            style="cursor:pointer;"
+            title="Click to copy order number"
+            onclick="(function(el){var orderId='{{ order.public_id }}';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(orderId);}var toast=document.getElementById('order-copy-toast');if(toast){toast.style.opacity='1';toast.style.transform='translateY(0)';clearTimeout(window.__orderCopyToastTimer);window.__orderCopyToastTimer=setTimeout(function(){toast.style.opacity='0';toast.style.transform='translateY(8px)';},1200);}})(this);"
+          >{{ order.public_id }}</code>
+        </h1>
+        <p class="muted" style="margin:8px 0 0;">Created: {{ order.created_at|date:"d/m/Y H:i" }} (UTC)</p>
+      </div>
+    </div>
+
+    <div id="order-status-card">
+      {% include "orders/partials/order_status_card.html" %}
+    </div>
+
+    <div class="section" style="padding:16px;">
+      {% if show_content_actions %}
+        <textarea id="order-content-text" style="display:none;">{{ purchased_content_text }}</textarea>
+      {% endif %}
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <h2 style="margin:0;">Your order</h2>
+      </div>
+      <div style="display:grid;gap:10px;">
+        {% for row in order_item_views %}
+          {% with item=row.item %}
+          <div style="border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <span style="font-weight:500;">
+                {{ item.product.product_card.name }}
+                {% if row.selection_rows %}
+                  {% for sku_row in row.selection_rows %}
+                    / {{ sku_row.value }}
+                  {% endfor %}
+                {% endif %}
+              </span>
+              <span>{{ item.quantity }} x {{ item.unit_price }} {{ order.currency }}</span>
+            </div>
+          </div>
+          {% if row.item_payloads %}
+            <div style="border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;">
+              <div class="muted">Contents:</div>
+              <ul style="margin:6px 0 0 18px;padding:0;display:grid;gap:6px;">
+                {% for payload in row.item_payloads %}
+                  <li>
+                    {% if payload|slice:":8" == "https://" or payload|slice:":7" == "http://" %}
+                      <a href="{{ payload }}" target="_blank" rel="noopener">{{ payload }}</a>
+                    {% else %}
+                      <code style="word-break:break-all;">{{ payload }}</code>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% elif item.input_payload %}
+            <div style="border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;">
+              <div class="muted">Order data:</div>
+              <ul style="margin:6px 0 0 18px;padding:0;display:grid;gap:6px;">
+                {% for row in row.input_rows %}
+                  <li>
+                    <strong>{{ row.label }}:</strong>
+                    {% if row.is_password %}
+                      <span
+                        style="display:inline-flex;align-items:center;margin-left:8px;gap:6px;vertical-align:middle;"
+                      >
+                        <code
+                          style="word-break:break-all;"
+                          data-password-value="{{ row.value|escapejs }}"
+                          data-password-hidden="1"
+                        >********</code>
+                        <button
+                          type="button"
+                          title="Show or hide password"
+                          aria-label="Toggle password visibility"
+                          onclick="(function(btn){var codeEl=btn.previousElementSibling;if(!codeEl)return;var hidden=codeEl.getAttribute('data-password-hidden')==='1';if(hidden){codeEl.textContent=codeEl.getAttribute('data-password-value')||'';codeEl.setAttribute('data-password-hidden','0');btn.setAttribute('aria-pressed','true');}else{codeEl.textContent='********';codeEl.setAttribute('data-password-hidden','1');btn.setAttribute('aria-pressed','false');}})(this);"
+                          style="border:0;background:transparent;color:#94a3b8;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0 2px;"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                        </button>
+                      </span>
+                    {% elif row.value|slice:":8" == "https://" or row.value|slice:":7" == "http://" %}
+                      <a href="{{ row.value }}" target="_blank" rel="noopener">{{ row.value }}</a>
+                    {% else %}
+                      <code style="margin-left:8px;word-break:break-all;">{{ row.value }}</code>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+          {% endwith %}
+        {% endfor %}
+      </div>
+      {% if show_content_actions %}
+        <div style="display:flex;gap:8px;align-items:center;justify-content:flex-start;margin-top:10px;">
+          <button
+            type="button"
+            class="small-btn"
+            onclick="(function(btn){var el=document.getElementById('order-content-text');var t=el?el.value:'';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t);}btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy';},1200);})(this);"
+          >Copy</button>
+          <button
+            type="button"
+            class="small-btn"
+            data-order-id="{{ order.public_id }}"
+            onclick="(function(btn){var el=document.getElementById('order-content-text');var txt=el?el.value:'';var orderId=btn.getAttribute('data-order-id')||'order';var filename='order-'+orderId+'-content.txt';try{var blob=new Blob([txt],{type:'text/plain;charset=utf-8'});var u=(window.URL||window.webkitURL);var url=u.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){u.revokeObjectURL(url);},1000);}catch(e){var fallback='data:text/plain;charset=utf-8,'+encodeURIComponent(txt);var af=document.createElement('a');af.href=fallback;af.download=filename;document.body.appendChild(af);af.click();af.remove();}})(this);"
+          >Download</button>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="section" style="padding:16px;">
+      <h3 style="margin:0 0 8px;">Support</h3>
+      <div class="muted" style="margin:0 0 10px;">
+        Order number:
+        <code
+          id="support-order-id"
+          style="margin-left:6px;cursor:pointer;"
+          title="Click to copy order number"
+          onclick="(function(el){var orderId='{{ order.public_id }}';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(orderId);}var toast=document.getElementById('order-copy-toast');if(toast){toast.style.opacity='1';toast.style.transform='translateY(0)';clearTimeout(window.__orderCopyToastTimer);window.__orderCopyToastTimer=setTimeout(function(){toast.style.opacity='0';toast.style.transform='translateY(8px)';},1200);}})(this);"
+        >{{ order.public_id }}</code>
+      </div>
+      <p class="muted" style="margin:0;line-height:1.6;">
+        Please read the product instructions.<br>
+        If you have any questions, contact our support team and include your order number.
+      </p>
+    </div>
+
+  </section>
+  <script>
+    (function() {
+      if (window.__orderContentRefreshBound) return;
+      window.__orderContentRefreshBound = true;
+      document.body.addEventListener('order-content-refresh', function() {
+        if (window.__orderContentRefreshDone) return;
+        window.__orderContentRefreshDone = true;
+        window.location.reload();
+      });
+    })();
+  </script>
+  <div class="spacer"></div>
+</div>

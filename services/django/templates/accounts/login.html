@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in - FreeStorex{% endblock %}
+
+{% block content %}
+<section class="auth-page" hx-boost="false">
+  <div class="modal">
+    {% include "accounts/partials/login_content.html" %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% for message in messages %}
+  <div
+    class="auth-inline-messages__item auth-inline-messages__item--{% if message.level >= 40 %}error{% elif message.level == 30 %}warning{% elif message.level == 25 %}success{% else %}info{% endif %}"
+  >{{ message }}</div>
+{% endfor %}

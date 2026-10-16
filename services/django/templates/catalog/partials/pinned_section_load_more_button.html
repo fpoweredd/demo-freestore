@@ -1,0 +1,13 @@
+{% if next_page %}
+  <div class="spacer-24"></div>
+  <button
+    type="button"
+    class="action-btn"
+    style="width:100%;max-width:340px;display:block;margin:0 auto;"
+    hx-get="{% url 'catalog:home' %}?chunk=pinned&section_id={{ section.id }}&page={{ next_page }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if filter_tag %}&tag={{ filter_tag|urlencode }}{% endif %}"
+    hx-target="#pinned-grid-{{ section.id }}"
+    hx-swap="beforeend"
+  >
+    Show more
+  </button>
+{% endif %}

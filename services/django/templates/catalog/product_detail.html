@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}{{ card.name }} - FreeStorex{% endblock %}
+
+{% block meta_robots %}{% if card.is_hidden %}<meta name="robots" content="noindex, nofollow">{% endif %}{% endblock %}
+
+{% block content %}
+{% include "catalog/partials/product_detail_content.html" %}
+{% endblock %}

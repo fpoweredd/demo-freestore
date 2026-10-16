@@ -1,0 +1,47 @@
+<div
+  class="section"
+  style="padding:16px;"
+  {% if order.status not in terminal_statuses %}
+    hx-get="{% url 'orders-web:order-status-partial' public_id=order.public_id %}"
+    hx-trigger="every 5s"
+    hx-target="this"
+    hx-swap="outerHTML"
+    hx-push-url="false"
+  {% endif %}
+>
+  <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+    <h3 style="margin:0;">Status</h3>
+    <span
+      class="chip active"
+      style="
+        {% if order.status == 'completed' %}background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.45);color:#86efac;
+        {% elif order.status == 'cancelled' %}background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.45);color:#fca5a5;
+        {% elif order.status == 'awaiting_payment' %}background:rgba(148,163,184,.18);border-color:rgba(148,163,184,.45);color:#cbd5e1;
+        {% elif order.status == 'waiting_stock' %}background:rgba(245,158,11,.18);border-color:rgba(245,158,11,.45);color:#fcd34d;
+        {% elif order.status == 'partially_fulfilled' %}background:rgba(234,179,8,.22);border-color:rgba(234,179,8,.5);color:#fde68a;
+        {% elif order.status == 'manual_pending' %}background:rgba(59,130,246,.18);border-color:rgba(59,130,246,.45);color:#93c5fd;
+        {% elif order.status == 'paid' %}background:rgba(16,185,129,.18);border-color:rgba(16,185,129,.45);color:#6ee7b7;
+        {% else %}background:rgba(148,163,184,.18);border-color:rgba(148,163,184,.45);color:#cbd5e1;{% endif %}
+      "
+    >{{ order.get_status_display }}</span>
+  </div>
+  <p class="muted" style="margin:8px 0 0;">
+    {% if order.status == "awaiting_payment" %}
+      Waiting for payment.
+    {% elif order.status == "paid" %}
+      Payment received — preparing delivery.
+    {% elif order.status == "waiting_stock" %}
+      Your order is paid. We're processing it!
+    {% elif order.status == "partially_fulfilled" %}
+      Part of the order has been delivered. Hang tight while we finish the rest!
+    {% elif order.status == "manual_pending" %}
+      Paid. Order is being processed.
+    {% elif order.status == "completed" %}
+      Order completed. Details are below.
+    {% elif order.status == "cancelled" %}
+      Order cancelled.
+    {% else %}
+      Processing your order.
+    {% endif %}
+  </p>
+</div>

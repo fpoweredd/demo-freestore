@@ -1,0 +1,24 @@
+{% load static %}
+<footer>
+  <div class="container footer-grid">
+    <div>
+      <div class="footer-brand">
+        <img class="footer-brand-logo" src="{% static 'img/bw-logo.png' %}" alt="FreeStorex">
+        <span>Digital goods store</span>
+      </div>
+      <p class="muted">© FREESTOREX, {% now "Y" %}</p>
+    </div>
+
+    <div>
+      <h4 class="footer-title">Contact us</h4>
+      <div class="footer-list">
+        <a href="{% url 'contacts' %}" hx-get="{% url 'contacts' %}" class="footer-link">Contacts</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container footer-bottom">
+    <a href="{% url 'policy' %}" hx-get="{% url 'policy' %}">Privacy Policy</a>
+    <a href="{% url 'terms' %}" hx-get="{% url 'terms' %}">Terms of Service</a>
+  </div>
+</footer>

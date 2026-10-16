@@ -1,0 +1,28 @@
+<div
+  class="section"
+  style="padding:16px;"
+  {% if order.status not in terminal_statuses %}
+    hx-get="{% url 'orders-web:order-payment-partial' public_id=order.public_id %}"
+    hx-trigger="every 5s"
+    hx-target="this"
+    hx-swap="outerHTML"
+    hx-push-url="false"
+  {% endif %}
+>
+  <h3 style="margin:0 0 10px;">Payment</h3>
+  <p class="muted" style="margin:0 0 10px;">Payment is initiated on product page using selected method.</p>
+
+  {% if latest_payment %}
+    <div style="margin-top:12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;">
+      <div class="muted">Method: {{ latest_payment.provider }}</div>
+      <div class="muted">Payment status: {{ latest_payment.get_status_display }}</div>
+      {% if latest_payment.invoice_url %}
+        <a class="small-btn" href="{{ latest_payment.invoice_url }}" target="_blank" rel="noopener">Open payment page</a>
+      {% endif %}
+    </div>
+  {% elif order.status == "awaiting_payment" %}
+    <div class="muted" style="margin-top:12px;">Waiting for payment initialization...</div>
+  {% else %}
+    <div class="muted" style="margin-top:12px;">No active payment session.</div>
+  {% endif %}
+</div>
