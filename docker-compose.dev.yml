@@ -1,0 +1,42 @@
+# Local development: live code sync, Django dev server, DB/Redis on localhost, Adminer.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
+
+x-watch: &watch
+  develop:
+    watch:
+      - action: sync+restart
+        path: services/django
+        target: /app/services/django
+        ignore: [__pycache__/, staticfiles/]
+      - action: rebuild
+        path: services/django/requirements.txt
+
+services:
+  web:
+    <<: *watch
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      RUN_MIGRATIONS: "1"
+      DEBUG: "True"
+
+  worker:
+    <<: *watch
+
+  beat:
+    <<: *watch
+
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  adminer:
+    image: adminer:4
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - postgres

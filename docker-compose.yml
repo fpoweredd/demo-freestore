@@ -1,0 +1,114 @@
+# Freestore — digital goods store.
+#
+#   cp .env.example .env && docker compose up -d     # shop: web + postgres + redis
+#   COMPOSE_PROFILES=workers,bot,mail (in .env)      # + Celery, Telegram bot, mail server
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch   # local development
+
+name: freestore
+
+x-django: &django
+  build:
+    context: .
+    dockerfile: services/django/Dockerfile
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - logs:/app/logs
+    - media:/app/media
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
+services:
+  web:
+    <<: *django
+    environment:
+      RUN_MIGRATIONS: "1"
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/')"]
+      interval: 30s
+      start_period: 30s
+
+  worker:
+    <<: *django
+    profiles: [workers]
+    command: celery -A config worker --loglevel=info --queues=email
+
+  beat:
+    <<: *django
+    profiles: [workers]
+    command: celery -A config beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: services/telegram-bot/Dockerfile
+    profiles: [bot]
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis:/data
+
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:15
+    profiles: [mail]
+    hostname: ${MAILSERVER_OVERRIDE_HOSTNAME:-mail.example.com}
+    restart: unless-stopped
+    stop_grace_period: 1m
+    environment:
+      OVERRIDE_HOSTNAME: ${MAILSERVER_OVERRIDE_HOSTNAME:-mail.example.com}
+      POSTMASTER_ADDRESS: ${MAILSERVER_POSTMASTER_ADDRESS:-postmaster@example.com}
+      SSL_TYPE: ${MAILSERVER_SSL_TYPE:-self-signed}
+      RELAY_HOST: ${MAILSERVER_RELAY_HOST:-}
+      RELAY_PORT: ${MAILSERVER_RELAY_PORT:-587}
+      RELAY_USER: ${MAILSERVER_RELAY_USER:-}
+      RELAY_PASSWORD: ${MAILSERVER_RELAY_PASSWORD:-}
+      ONE_DIR: 1
+      PERMIT_DOCKER: none
+      ENABLE_UPDATE_CHECK: 0
+    ports:
+      - "${MAILSERVER_SMTP_PORT:-25}:25"
+      - "587:587"
+      - "993:993"
+    volumes:
+      - mail:/var/mail
+      - mail-state:/var/mail-state
+      - mail-config:/tmp/docker-mailserver
+    networks:
+      default:
+        aliases:
+          - ${MAILSERVER_OVERRIDE_HOSTNAME:-mail.example.com}
+
+volumes:
+  pgdata:
+  redis:
+  media:
+  logs:
+  mail:
+  mail-state:
+  mail-config:
